@@ -8,14 +8,92 @@ import matplotlib.pyplot as plt
 import os
 
 # =========================
-# CONFIG & UI
+# CONFIG
 # =========================
 st.set_page_config(page_title="Audio Artifact Detector Pro", layout="wide")
-st.title("🎧 Advanced Audio Artifact Detection")
-st.caption("Deep Learning 3-Channel (MFCC + Delta + Delta2) | Trained on ESC-50")
 
 # =========================
-# MODEL STRUCTURE (3-Channel)
+# GLOBAL CSS (UI đẹp)
+# =========================
+st.markdown("""
+<style>
+
+/* ===== BACKGROUND ===== */
+.stApp {
+    background: linear-gradient(135deg, #25274D, #29648A);
+    color: white;
+}
+
+/* ===== TITLE STYLE ===== */
+.title {
+    font-size: 64px;
+    font-weight: 700;
+    text-align: center;
+    background: linear-gradient(90deg, #EDEDED, #2E9CCA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 3px;
+}
+
+/* ===== SUBTITLE ===== */
+.subtitle {
+    text-align:center;
+    color:#AAABB8;
+    font-size:18px;
+}
+
+/* ===== HEADINGS ===== */
+h2, h3 {
+    background: linear-gradient(90deg, #EDEDED, #2E9CCA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight:600;
+}
+
+/* ===== TEXT ===== */
+p, label, span {
+    color: #EDEDED !important;
+}
+
+/* ===== FILE UPLOADER ===== */
+[data-testid="stFileUploader"] {
+    background-color: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+/* ===== PROGRESS BAR ===== */
+.stProgress > div > div {
+    background: linear-gradient(90deg, #2E9CCA, #ffffff);
+    height: 12px;
+    border-radius: 10px;
+}
+
+ /* ===== FIX TEXT UPLOAD BUTTON ===== */
+[data-testid="stFileUploader"] button {
+    color: black !important;
+    font-weight: 600;
+}
+
+[data-testid="stFileUploader"] button span {
+    color: black !important;
+}
+
+            /* Force toàn bộ text trong button thành đen */
+[data-testid="stFileUploader"] button * {
+    color: black !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# TITLE
+# =========================
+st.markdown("<div class='title'>Audio Artifact Detection</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Deep Learning System • MFCC + Temporal Features</div>", unsafe_allow_html=True)
+
+# =========================
+# MODEL
 # =========================
 class BetterCNN(nn.Module):
     def __init__(self):
@@ -25,10 +103,12 @@ class BetterCNN(nn.Module):
             nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.MaxPool2d((2,1)),
+
             nn.Conv2d(16, 32, 3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d((2,1)),
+
             nn.Conv2d(32, 64, 3, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
@@ -42,89 +122,134 @@ class BetterCNN(nn.Module):
         x = x.permute(0, 2, 1)
         return self.fc_time(x)
 
-# LOAD MODEL
 @st.cache_resource
-def load_my_model():
-    m = BetterCNN()
-    model_path = "models/model.pth"
-    if os.path.exists(model_path):
-        m.load_state_dict(torch.load(model_path, map_location="cpu"))
-        m.eval()
-        return m
+def load_model():
+    model = BetterCNN()
+    path = "models/model.pth"
+    if os.path.exists(path):
+        model.load_state_dict(torch.load(path, map_location="cpu"))
+        model.eval()
+        return model
     return None
 
-model = load_my_model()
+model = load_model()
 
 # =========================
-# FILE UPLOAD
+# UPLOAD
 # =========================
-file = st.file_uploader("📂 Upload file âm thanh để kiểm tra (WAV/MP3)", type=["wav", "mp3"])
+st.markdown("## Upload Audio")
+file = st.file_uploader("Choose WAV/MP3", type=["wav", "mp3"])
 
 if file:
+
     if model is None:
-        st.error("❌ Không tìm thấy models/model.pth. Hãy chạy train.py trước!")
+        st.error("Model not found! Train first.")
+        st.stop()
+
+    # Save file
+    with open("temp_test.wav", "wb") as f:
+        f.write(file.getbuffer())
+
+    st.audio("temp_test.wav")
+
+    # =========================
+    # FEATURE
+    # =========================
+    y, sr = librosa.load("temp_test.wav", sr=22050, duration=5.0)
+
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+    delta = librosa.feature.delta(mfcc)
+    delta2 = librosa.feature.delta(mfcc, order=2)
+
+    feat = np.stack([mfcc, delta, delta2])
+    feat = (feat - feat.mean()) / (feat.std() + 1e-6)
+
+    X = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
+
+    # =========================
+    # PREDICT
+    # =========================
+    with torch.no_grad():
+        output = model(X)
+        probs = torch.softmax(output, dim=-1)[0].numpy()
+        artifact_prob = probs[:, 1]
+
+    score = float(np.mean(artifact_prob))
+
+    # =========================
+    # RESULT
+    # =========================
+    st.markdown("## Result")
+
+    if score > 0.5:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(90deg, #ff4b5c, #8b0000);
+            padding: 20px;
+            border-radius: 12px;
+            text-align:center;
+            font-weight:600;
+            font-size:20px;
+            color:white;
+            box-shadow: 0 0 25px rgba(255,0,0,0.5);
+        '>
+        COMPRESSED AUDIO DETECTED
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        with open("temp_test.wav", "wb") as f:
-            f.write(file.getbuffer())
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(90deg, #00e676, #007f5f);
+            padding: 20px;
+            border-radius: 12px;
+            text-align:center;
+            font-weight:600;
+            font-size:20px;
+            color:white;
+            box-shadow: 0 0 20px rgba(0,255,150,0.5);
+        '>
+        CLEAN AUDIO (HIGH QUALITY)
+        </div>
+        """, unsafe_allow_html=True)
 
-        # 1. TRÍCH XUẤT ĐẶC TRƯNG 3 KÊNH (GIỐNG HỆT TRAIN.PY)
-        y, sr = librosa.load("temp_test.wav", sr=22050, duration=5.0)
-        st.audio("temp_test.wav")
+    # ===== Confidence đẹp =====
+    st.markdown(f"""
+    <p style='
+        font-size:18px;
+        font-weight:500;
+    '>
+    Confidence Score: <span style='color:#2E9CCA; font-weight:700;'>{score:.4f}</span>
+    </p>
+    """, unsafe_allow_html=True)
 
-        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
-        delta = librosa.feature.delta(mfcc)
-        delta2 = librosa.feature.delta(mfcc, order=2)
-        
-        feat = np.stack([mfcc, delta, delta2])
-        # Chuẩn hóa per-sample
-        feat = (feat - feat.mean()) / (feat.std() + 1e-6)
-        
-        # Chuyển thành tensor (Batch=1, Channel=3, Freq=13, Time=T)
-        X = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
+    st.progress(score)
 
-        # 2. DỰ ĐOÁN
-        with torch.no_grad():
-            output = model(X) # Output shape: (1, T, 2)
-            probs = torch.softmax(output, dim=-1)[0].numpy()
-            artifact_prob = probs[:, 1] # Xác suất bị nén (Class 1)
+    # =========================
+    # VISUAL
+    # =========================
+    st.markdown("---")
+    col1, col2 = st.columns(2)
 
-        # 3. HIỂN THỊ KẾT QUẢ
-        # Lấy giá trị trung bình hoặc max để đánh giá tổng thể file
-        final_score = np.mean(artifact_prob)
-        
-        st.subheader("🎯 Prediction Result")
-        if final_score > 0.5:
-            st.error(f"**Status: Compressed (Artifacts Detected)**")
-        else:
-            st.success(f"**Status: Clean (High Quality)**")
-        
-        st.write(f"Artifact Confidence Score: **{final_score:.4f}**")
-        st.progress(float(final_score))
+    with col1:
+        st.markdown("### Spectrogram")
 
-        # 4. VISUALIZATION (HIGHLIGHTS)
-        st.markdown("---")
-        col1, col2 = st.columns(2)
+        D = librosa.amplitude_to_db(np.abs(librosa.stft(y)), ref=np.max)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        img = librosa.display.specshow(D, sr=sr, x_axis='time', y_axis='log', ax=ax)
 
-        with col1:
-            st.subheader("🔥 Spectrogram with Highlights")
-            D = librosa.amplitude_to_db(np.abs(librosa.stft(y)), ref=np.max)
-            fig, ax = plt.subplots(figsize=(10, 6))
-            img = librosa.display.specshow(D, sr=sr, x_axis='time', y_axis='log', ax=ax)
-            
-            # Vẽ vùng highlight đỏ nếu xác suất tại khung thời gian đó > 0.5
-            times = np.linspace(0, len(y)/sr, len(artifact_prob))
-            hop_time = times[1] - times[0] if len(times) > 1 else 0
-            for i, p in enumerate(artifact_prob):
-                if p > 0.5:
-                    ax.axvspan(times[i], times[i] + hop_time, color='red', alpha=0.3)
-            
-            plt.colorbar(img, format="%+2.0f dB")
-            st.pyplot(fig)
+        times = np.linspace(0, len(y)/sr, len(artifact_prob))
+        hop = times[1] - times[0] if len(times) > 1 else 0
 
-        with col2:
-            st.subheader("📊 3-Channel Feature View")
-            # Hiển thị kênh Delta để thấy sự biến thiên
-            fig, ax = plt.subplots(figsize=(10, 6))
-            librosa.display.specshow(delta, sr=sr, x_axis='time', ax=ax)
-            st.subheader("Delta MFCC (Motion Features)")
-            st.pyplot(fig)
+        for i, p in enumerate(artifact_prob):
+            if p > 0.5:
+                ax.axvspan(times[i], times[i] + hop, color='red', alpha=0.3)
+
+        plt.colorbar(img)
+        st.pyplot(fig)
+
+    with col2:
+        st.markdown("### Delta MFCC")
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        librosa.display.specshow(delta, sr=sr, x_axis='time', ax=ax)
+        st.pyplot(fig)
