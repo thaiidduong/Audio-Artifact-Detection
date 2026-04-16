@@ -227,40 +227,33 @@ with col_input:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+# ==========================================
+# PHẦN XỬ LÝ LOGIC & LƯU TRẠNG THÁI (SESSION STATE)
+# ==========================================
+
+# 1. Khởi tạo bộ nhớ tạm để giữ kết quả không bị mất khi ấn Toggle
+if "analysis_results" not in st.session_state:
+    st.session_state.analysis_results = None
+
 if analyze_btn:
-
     with st.spinner("Deep Analysis in progress..."):
-
         # ===== CHỌN FILE =====
         if input_mode == "Live Recording":
             compressed_path = "temp_compressed.mp3"
-
-            # 🔥 COMPRESS FILE VỪA RECORD
-            compress_audio(
-                input_path=source_audio_path,
-                output_path=compressed_path
-            )
-
+            compress_audio(input_path=source_audio_path, output_path=compressed_path)
             audio_path_to_use = compressed_path
-
-            # 👉 show để demo
             st.write("Compressed audio:")
             st.audio(compressed_path)
-
         else:
             audio_path_to_use = source_audio_path
 
-        # ===== LOAD AUDIO =====
+        # ===== LOAD AUDIO & FEATURE =====
         y, sr = librosa.load(audio_path_to_use, sr=22050, duration=5.0)
-
-        # ===== FEATURE =====
         mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
         delta = librosa.feature.delta(mfcc)
         delta2 = librosa.feature.delta(mfcc, order=2)
-
         feat = np.stack([mfcc, delta, delta2])
         feat = (feat - feat.mean()) / (feat.std() + 1e-6)
-
         X = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
 
         # ===== PREDICT =====
@@ -268,15 +261,34 @@ if analyze_btn:
             output = model(X)
             probs = torch.softmax(output, dim=-1)[0].numpy()
 
-        artifact_probs_series = probs[:, 1]
-        avg_score = float(np.mean(artifact_probs_series))
+        # 2. LƯU TẤT CẢ KẾT QUẢ VÀO SESSION STATE
+        st.session_state.analysis_results = {
+            "artifact_probs_series": probs[:, 1],
+            "avg_score": float(np.mean(probs[:, 1])),
+            "y": y,
+            "sr": sr,
+            "mfcc_var": np.var(mfcc)
+        }
+
+# ==========================================
+# PHẦN HIỂN THỊ GIAO DIỆN (Lấy từ Session State)
+# ==========================================
+
+# Chỉ hiển thị kết quả nếu đã có dữ liệu trong bộ nhớ
+if st.session_state.analysis_results is not None:
+    # Lấy dữ liệu ra
+    res = st.session_state.analysis_results
+    artifact_probs_series = res["artifact_probs_series"]
+    avg_score = res["avg_score"]
+    y = res["y"]
+    sr = res["sr"]
+    mfcc_var = res["mfcc_var"]
 
     is_compressed = avg_score > 0.5
     theme_color = "#FF4B4B" if is_compressed else "#00FF7F" 
     status_text = "COMPRESSED AUDIO DETECTED" if is_compressed else "CLEAN AUDIO VERIFIED"
 
     with col_result:
-        # Xác định icon và thông điệp dựa trên kết quả
         if is_compressed:
             display_icon = "🚨"
             bg_box = "rgba(255, 75, 75, 0.2)"
@@ -288,9 +300,7 @@ if analyze_btn:
             border_box = "#00FF7F"
             desc = "High-fidelity audio signal. No characteristic compression artifacts were detected."
 
-        # Header kết quả
         st.markdown(f"### Analysis Result: <span style='color:{theme_color}'>{status_text}</span>", unsafe_allow_html=True)
-        
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["Overview", "Technical Metrics"])
@@ -298,7 +308,6 @@ if analyze_btn:
         with tab1:
             r1, r2 = st.columns([1, 1.2])
             with r1:
-                # Gauge Chart
                 fig_g = go.Figure(go.Indicator(
                     mode="gauge+number", value=avg_score*100,
                     number={'suffix': "%", 'font': {'color': theme_color}},
@@ -311,7 +320,6 @@ if analyze_btn:
                 st.plotly_chart(fig_g, use_container_width=True)
             
             with r2:
-                # Box thông báo tùy chỉnh với Icon theo yêu cầu
                 st.markdown(f"""
                     <div style="background-color:{bg_box}; border: 1px solid {border_box}; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
                         <span style="font-size: 1.2rem; margin-right: 8px;">{display_icon}</span>
@@ -319,13 +327,12 @@ if analyze_btn:
                         <div style="margin-top: 8px; font-size: 0.85rem; color: #E0E0E0; line-height: 1.4;">{desc}</div>
                     </div>
                 """, unsafe_allow_html=True)
-                
                 st.metric("Probability Score", f"{avg_score:.4f}")
 
         with tab2:
             m1, m2, m3 = st.columns(3)
             m1.metric("Sample Rate", f"{sr/1000} kHz")
-            m2.metric("Feature Variance", f"{np.var(mfcc):.2f}")
+            m2.metric("Feature Variance", f"{mfcc_var:.2f}")
             m3.metric("Confidence Level", "High" if abs(avg_score-0.5)>0.2 else "Low")
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -333,8 +340,12 @@ if analyze_btn:
     # VISUALIZATIONS
     # =========================
     st.markdown("### Deep Signal Analysis")
-    v1, v2 = st.columns(2)
+    
+    # Nút toggle giờ đây sẽ không làm mất dữ liệu nữa
+    highlight_compress = st.toggle("🔍 Highlight compressed area", value=False)
+    threshold = 0.5 
 
+    v1, v2 = st.columns(2)
     plt.rcParams.update({"text.color": "white", "axes.labelcolor": "white", "xtick.color": "white", "ytick.color": "white", "figure.facecolor": (0,0,0,0), "axes.facecolor": (0,0,0,0)})
 
     with v1:
@@ -342,6 +353,18 @@ if analyze_btn:
         st.caption("Artifact Probability Over Time")
         fig_l = go.Figure()
         fig_l.add_trace(go.Scatter(y=artifact_probs_series, mode='lines', line=dict(color=theme_color, width=2), fill='tozeroy', fillcolor=f'rgba{tuple(list(int(theme_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)) + [0.2])}'))
+        
+        if highlight_compress:
+            start_idx = None
+            for i, prob in enumerate(artifact_probs_series):
+                if prob > threshold and start_idx is None:
+                    start_idx = i
+                elif prob <= threshold and start_idx is not None:
+                    fig_l.add_vrect(x0=start_idx, x1=i, fillcolor="red", opacity=0.25, line_width=0)
+                    start_idx = None
+            if start_idx is not None:
+                fig_l.add_vrect(x0=start_idx, x1=len(artifact_probs_series)-1, fillcolor="red", opacity=0.25, line_width=0)
+
         fig_l.update_layout(height=250, margin=dict(l=0,r=0,t=10,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font={'color': "white"}, xaxis_title="Time Frames", yaxis_title="Probability")
         st.plotly_chart(fig_l, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -352,6 +375,19 @@ if analyze_btn:
         fig, ax = plt.subplots(figsize=(10, 4))
         D = librosa.amplitude_to_db(np.abs(librosa.stft(y)), ref=np.max)
         img = librosa.display.specshow(D, sr=sr, x_axis='time', y_axis='hz', ax=ax, cmap='magma')
+        
+        if highlight_compress:
+            times = librosa.frames_to_time(np.arange(len(artifact_probs_series)), sr=sr)
+            start_idx = None
+            for i, prob in enumerate(artifact_probs_series):
+                if prob > threshold and start_idx is None:
+                    start_idx = i
+                elif prob <= threshold and start_idx is not None:
+                    ax.axvspan(times[start_idx], times[i], color='red', alpha=0.3)
+                    start_idx = None
+            if start_idx is not None:
+                ax.axvspan(times[start_idx], times[-1], color='red', alpha=0.3)
+
         plt.colorbar(img, ax=ax, format="%+2.f dB").ax.yaxis.set_tick_params(color='white')
         st.pyplot(fig)
         st.markdown('</div>', unsafe_allow_html=True)
