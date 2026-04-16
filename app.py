@@ -6,8 +6,15 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from streamlit_mic_recorder import mic_recorder
 import os
+from pydub import AudioSegment
 
+def compress_audio(input_path, output_path):
+    audio = AudioSegment.from_file(input_path)
+
+    # 🔥 export sang MP3 bitrate thấp
+    audio.export(output_path, format="mp3", bitrate="8k")
 # =========================
 # CONFIG
 # =========================
@@ -17,9 +24,57 @@ st.set_page_config(page_title="Audio Artifact Detector Pro", layout="wide")
 # CSS + UI ENHANCEMENTS
 # =========================
 st.markdown("""
-<style>
+<style>     
+            /* BUTTON STYLE (glass) */
+button {
+    background: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 12px !important;
+    color: white !important;
+}
+
+/* Hover */
+button:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
     .stApp { background: linear-gradient(135deg, #1a1c35, #29648a); color: #E0E0E0; }
     
+            /* ANIMATED SOUND WAVE */
+    .visualizer-container {
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        height: 40px;
+        gap: 4px;
+        margin-bottom: -10px;
+        padding: 0 20px;
+    }
+
+    .bar {
+        width: 6px;
+        height: 5px;
+        background: linear-gradient(to top, #4facfe, #00f2fe);
+        border-radius: 3px;
+        animation: sound-wave 1.5s infinite ease-in-out;
+    }
+
+     /* Tạo hiệu ứng ngẫu nhiên cho 20 thanh bar để trải dài hơn */
+    .bar:nth-child(2n) { animation-duration: 1.2s; }
+    .bar:nth-child(3n) { animation-duration: 1.8s; }
+    .bar:nth-child(4n) { animation-duration: 1.4s; }
+    
+    /* Delay từng nhóm để tạo hiệu ứng lượn sóng */
+    .bar:nth-child(odd) { animation-delay: 0.2s; }
+    .bar:nth-child(even) { animation-delay: 0.4s; }
+    .bar:nth-child(3n+1) { animation-delay: 0.6s; }
+
+    @keyframes sound-wave {
+        0%, 100% { height: 5px; opacity: 0.3; }
+        50% { height: 40px; opacity: 1; }
+    }
+            
     /* GLASS CARD */
     .glass-card {
         background: rgba(255, 255, 255, 0.05);
@@ -69,7 +124,7 @@ st.markdown("""
     /* TEXT COLORS */
     p, li, span, label, .stMarkdown { color: #E0E0E0 !important; }
     .title-glow {
-        font-size: 50px; font-weight: 800; text-align: center;
+        font-size: 70px; font-weight: 900; text-align: center;
         background: linear-gradient(90deg, #fff, #4facfe, #00f2fe);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
@@ -117,38 +172,104 @@ def load_model():
 model = load_model()
 
 # =========================
-# MAIN APP
+# MAIN APP HEADING
 # =========================
-st.markdown("<div class='title-glow'>Audio Artifact Detection</div>", unsafe_allow_html=True)
+# Tạo danh sách các thanh bar (ở đây mình dùng 28 thanh để trải dài)
+bars_html = "".join(['<div class="bar"></div>' for _ in range(28)])
+
+st.markdown(f"""
+<div class="visualizer-container">
+    {bars_html}
+</div>
+<div class='title-glow'>Audio Artifact Detection</div>
+""", unsafe_allow_html=True)
 
 col_input, col_result = st.columns([1, 2])
 
 with col_input:
-    st.markdown("### Input Audio")
+    st.markdown("### Input Control")
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    file = st.file_uploader("Upload Audio (WAV/MP3)", type=["wav", "mp3"])
-    if file:
-        st.audio(file)
+
+    # Thêm lựa chọn nguồn đầu vào
+    input_mode = st.radio("Select Source:", ["File Upload", "Live Recording"])
+
+    # Biến để lưu đường dẫn file sẽ xử lý
+    source_audio_path = "temp_raw.wav" 
+    ready_to_analyze = False
+
+    if input_mode == "File Upload":
+        uploaded_file = st.file_uploader("Upload WAV/MP3", type=["wav", "mp3"])
+        if uploaded_file:
+            with open(source_audio_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.audio(uploaded_file)
+            ready_to_analyze = True
+    else:
+        st.write("Record your clean audio:")
+        # Widget ghi âm trực tiếp
+        audio_record = mic_recorder(start_prompt="⏺ Start Recording", stop_prompt="Stop", key='recorder')
+        if audio_record:
+            with open(source_audio_path, "wb") as f:
+                f.write(audio_record['bytes'])
+            st.audio(audio_record['bytes'])
+            ready_to_analyze = True
+
+     # Thêm nút bấm Nén và Phân tích để tạo luồng "Real-time"
+    if ready_to_analyze:
+        if input_mode == "File Upload":
+            button_label = " ANALYZE"
+        else:
+            button_label = " COMPRESS & ANALYZE"
+
+        analyze_btn = st.button(button_label, use_container_width=True)
+    else:
+        analyze_btn = False
+
     st.markdown('</div>', unsafe_allow_html=True)
 
-if file:
+if analyze_btn:
+
     with st.spinner("Deep Analysis in progress..."):
-        # Load and extract features
-        y, sr = librosa.load(file, sr=22050, duration=5.0)
+
+        # ===== CHỌN FILE =====
+        if input_mode == "Live Recording":
+            compressed_path = "temp_compressed.mp3"
+
+            # 🔥 COMPRESS FILE VỪA RECORD
+            compress_audio(
+                input_path=source_audio_path,
+                output_path=compressed_path
+            )
+
+            audio_path_to_use = compressed_path
+
+            # 👉 show để demo
+            st.write("Compressed audio:")
+            st.audio(compressed_path)
+
+        else:
+            audio_path_to_use = source_audio_path
+
+        # ===== LOAD AUDIO =====
+        y, sr = librosa.load(audio_path_to_use, sr=22050, duration=5.0)
+
+        # ===== FEATURE =====
         mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
         delta = librosa.feature.delta(mfcc)
         delta2 = librosa.feature.delta(mfcc, order=2)
-        
+
         feat = np.stack([mfcc, delta, delta2])
         feat = (feat - feat.mean()) / (feat.std() + 1e-6)
+
         X = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
 
-        # Prediction
+        # ===== PREDICT =====
         with torch.no_grad():
             output = model(X)
             probs = torch.softmax(output, dim=-1)[0].numpy()
-            artifact_probs_series = probs[:, 1]
-            avg_score = float(np.mean(artifact_probs_series))
+
+        artifact_probs_series = probs[:, 1]
+        avg_score = float(np.mean(artifact_probs_series))
 
     is_compressed = avg_score > 0.5
     theme_color = "#FF4B4B" if is_compressed else "#00FF7F" 
