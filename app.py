@@ -277,6 +277,9 @@ if analyze_btn:
             "avg_score": float(np.mean(probs[:, 1])),
             "y": y,
             "sr": sr,
+            "mfcc": mfcc,      
+            "delta": delta,    
+            "delta2": delta2,  
             "mfcc_var": np.var(mfcc)
         }
 
@@ -407,6 +410,42 @@ if st.session_state.analysis_results is not None:
         plt.colorbar(img, ax=ax, format="%+2.f dB").ax.yaxis.set_tick_params(color='white')
         st.pyplot(fig)
         st.markdown('</div>', unsafe_allow_html=True)
+
+        # Kiểm tra xem đã có kết quả phân tích chưa
+if st.session_state.analysis_results is not None:
+    res = st.session_state.analysis_results
+    
+    # Lấy dữ liệu ra để vẽ
+    mfcc_data = res["mfcc"]
+    delta_data = res["delta"]
+    delta2_data = res["delta2"]
+    sr_val = res["sr"]
+
+    st.markdown("### Feature Extraction Channels (3-Channel Input)")
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        st.caption("Channel 0: MFCC")
+        fig, ax = plt.subplots(figsize=(5, 3))
+        # Sử dụng mfcc_data thay vì mfcc
+        img = librosa.display.specshow(mfcc_data, sr=sr_val, x_axis='time', ax=ax, cmap='coolwarm')
+        st.pyplot(fig)
+
+    with c2:
+        st.caption("Channel 1: Delta")
+        fig, ax = plt.subplots(figsize=(5, 3))
+        img = librosa.display.specshow(delta_data, sr=sr_val, x_axis='time', ax=ax, cmap='magma')
+        st.pyplot(fig)
+
+    with c3:
+        st.caption("Channel 2: Delta-Delta")
+        fig, ax = plt.subplots(figsize=(5, 3))
+        img = librosa.display.specshow(delta2_data, sr=sr_val, x_axis='time', ax=ax, cmap='viridis')
+        st.pyplot(fig)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # FOOTER
 st.markdown(f"<div style='text-align:center; padding: 30px; color: #4facfe; font-size: 11px; letter-spacing: 1px; opacity: 0.6;'>NGUYEN ANH THAI DUONG • HUST • 2026</div>", unsafe_allow_html=True)
