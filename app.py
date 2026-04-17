@@ -13,7 +13,7 @@ from pydub import AudioSegment
 def compress_audio(input_path, output_path):
     audio = AudioSegment.from_file(input_path)
 
-    # 🔥 export sang MP3 bitrate thấp
+    # export sang MP3 bitrate thấp
     audio.export(output_path, format="mp3", bitrate="8k")
 # =========================
 # CONFIG
@@ -24,7 +24,8 @@ st.set_page_config(page_title="Audio Artifact Detector Pro", layout="wide")
 # CSS + UI ENHANCEMENTS
 # =========================
 st.markdown("""
-<style>     
+<style>
+                 
             /* BUTTON STYLE (glass) */
 button {
     background: rgba(255, 255, 255, 0.05) !important;
@@ -190,8 +191,17 @@ with col_input:
     st.markdown("### Input Control")
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
-    # Thêm lựa chọn nguồn đầu vào
-    input_mode = st.radio("Select Source:", ["File Upload", "Live Recording"])
+    # 1. Tạo hàm dọn dẹp bộ nhớ
+    def clear_old_results():
+        if "analysis_results" in st.session_state:
+            st.session_state.analysis_results = None
+
+    # 2. Thêm lựa chọn nguồn đầu vào (Gắn kèm hàm dọn dẹp vào on_change)
+    input_mode = st.radio(
+        "Select Source:", 
+        ["File Upload", "Live Recording"],
+        on_change=clear_old_results
+    )
 
     # Biến để lưu đường dẫn file sẽ xử lý
     source_audio_path = "temp_raw.wav" 
@@ -341,8 +351,14 @@ if st.session_state.analysis_results is not None:
     # =========================
     st.markdown("### Deep Signal Analysis")
     
-    # Nút toggle giờ đây sẽ không làm mất dữ liệu nữa
-    highlight_compress = st.toggle("🔍 Highlight compressed area", value=False)
+    # Chỉ cho phép hiện Highlight nếu kết quả dự đoán trung bình > threshold (tức là máy báo lỗi)
+    if avg_score > 0.5:
+        highlight_compress = st.toggle(" Highlight compressed area", value=False)
+    else:
+        # Nếu file sạch, tắt highlight và hiện dòng thông báo nhẹ cho người dùng
+        highlight_compress = False
+        st.markdown("<p style='font-size: 0.85rem; color: #00FF7F; opacity: 0.8;'> No significant artifacts detected to highlight.</p>", unsafe_allow_html=True)
+
     threshold = 0.5 
 
     v1, v2 = st.columns(2)
