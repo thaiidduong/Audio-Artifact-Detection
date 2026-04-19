@@ -9,14 +9,6 @@
 Deep Learning System for Detecting Compression Artifacts in Audio
 
 ---
-
-##  Overview
-
-This project presents a deep learning-based system for detecting compression artifacts in audio signals.
-
-Unlike traditional audio classification tasks that aim to identify *what* a sound is, this system focuses on understanding *how* the audio has been processed, specifically identifying degradation introduced by lossy compression.
-
----
 ## Description
 
 This project presents a deep learning-based framework for detecting audio compression artifacts, with a focus on low-bitrate signals (8 kbps).
