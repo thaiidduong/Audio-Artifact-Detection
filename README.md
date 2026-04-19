@@ -10,6 +10,25 @@ Deep Learning System for Detecting Compression Artifacts in Audio
 
 ---
 
+##  Overview
+
+This project presents a deep learning-based system for detecting compression artifacts in audio signals.
+
+Unlike traditional audio classification tasks that aim to identify *what* a sound is, this system focuses on understanding *how* the audio has been processed, specifically identifying degradation introduced by lossy compression.
+
+---
+
+##  Key Idea
+
+Instead of answering:
+
+> "What is this sound?"
+
+This system answers:
+
+> "How has this sound been processed?"
+
+---
 ## Description
 
 This project presents a deep learning-based framework for detecting audio compression artifacts, with a focus on low-bitrate signals (8 kbps).
@@ -24,13 +43,16 @@ The model utilizes a 3-channel feature representation (MFCC, Delta, Delta-Delta)
 
 ### Feature Representation
 
-Each audio signal is transformed into a 3-channel tensor:
+Each audio signal is transformed into a 3-channel feature tensor:
 
-* MFCC (Mel-Frequency Cepstral Coefficients)
-* Delta (First-order derivative)
-* Delta-Delta (Second-order derivative)
+- MFCC (Mel-Frequency Cepstral Coefficients)
+- Delta (First-order derivative)
+- Delta-Delta (Second-order derivative)
 
-This representation captures both spectral and temporal characteristics of the signal.
+This representation captures both:
+
+- Spectral characteristics (frequency content)
+- Temporal dynamics (changes over time)
 
 ---
 
@@ -56,18 +78,19 @@ The dataset is constructed from ESC-50 (Environmental Sound Dataset) with select
 
 ### Data Preparation
 
-Each clean audio sample is augmented into multiple compressed versions:
+To train the model for artifact detection, clean audio signals are processed to simulate lossy compression effects.
 
-```text id="data_block"
-Clean Audio (WAV)
-    ↓
-Compression (FFmpeg)
-    ├── 32 kbps
-    ├── 16 kbps
-    └── 8 kbps
-```
+Each audio sample is converted into compressed versions using standard encoding techniques.
 
-This allows the model to learn patterns of degradation across different compression levels.
+The goal is **not to classify bitrate**, but to expose the model to perceptual degradation patterns such as:
+
+- Loss of high-frequency components  
+- Temporal smearing  
+- Quantization noise  
+
+These characteristics are typical of compressed audio signals.
+
+The model therefore learns to detect **signal degradation patterns**, rather than relying on explicit compression parameters.
 
 ---
 
@@ -80,12 +103,20 @@ Preprocessing
     ↓
 Feature Extraction (MFCC + Delta + Delta2)
     ↓
-Dataset Construction (.npy)
+Model Inference (CNN)
     ↓
-Model Training (CNN)
-    ↓
-Deployment (Streamlit)
-```
+Visualization & Analysis (Streamlit)
+
+---
+
+##  System Features
+
+- Upload or record audio input  
+- Real-time artifact detection  
+- Artifact probability score  
+- Spectrogram visualization  
+- Temporal artifact highlighting  
+- Multi-channel feature visualization (MFCC, Delta, Delta-Delta)
 
 ---
 
@@ -96,6 +127,7 @@ Audio-Artifact-Detection/
 │
 ├── Audio-app/
 │   ├── app.py
+    ├── demo.gif
 │   ├── models/
 │   │     └── model.pth
 │
@@ -180,13 +212,17 @@ It answers:
 
 ## Technologies
 
-* Python
-* PyTorch
-* Librosa
-* Streamlit
-* FFmpeg
-* NumPy
-* Matplotlib
+- Python (core programming language)
+- PyTorch (deep learning framework)
+- Librosa (audio feature extraction)
+- SciPy (signal processing)
+- NumPy (numerical computation)
+- Pandas (data handling)
+- Matplotlib & Seaborn (visualization)
+- Plotly (interactive visualization)
+- SoundFile & Pydub (audio processing)
+- FFmpeg (audio encoding/decoding)
+- Streamlit (web-based deployment)
 
 ---
 
