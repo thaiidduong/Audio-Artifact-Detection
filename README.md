@@ -17,18 +17,6 @@ This project presents a deep learning-based system for detecting compression art
 Unlike traditional audio classification tasks that aim to identify *what* a sound is, this system focuses on understanding *how* the audio has been processed, specifically identifying degradation introduced by lossy compression.
 
 ---
-
-##  Key Idea
-
-Instead of answering:
-
-> "What is this sound?"
-
-This system answers:
-
-> "How has this sound been processed?"
-
----
 ## Description
 
 This project presents a deep learning-based framework for detecting audio compression artifacts, with a focus on low-bitrate signals (8 kbps).
