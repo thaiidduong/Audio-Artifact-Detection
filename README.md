@@ -94,17 +94,16 @@ The model therefore learns to detect **signal degradation patterns**, rather tha
 
 ---
 
-## System Pipeline
+##  System Pipeline
 
-```text id="pipeline_block"
-Raw Audio
-    ↓
-Preprocessing
-    ↓
-Feature Extraction (MFCC + Delta + Delta2)
-    ↓
-Model Inference (CNN)
-    ↓
+Raw Audio  
+↓  
+Preprocessing  
+↓  
+Feature Extraction (MFCC + Delta + Delta2)  
+↓  
+Model Inference (CNN)  
+↓  
 Visualization & Analysis (Streamlit)
 
 ---
@@ -142,7 +141,6 @@ Audio-Artifact-Detection/
 ├── requirements.txt
 ├── README.md
 ```
-
 ---
 
 ## Installation
